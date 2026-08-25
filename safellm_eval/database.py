@@ -90,6 +90,30 @@ def list_runs(connection: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def compare_runs(connection: sqlite3.Connection) -> list[sqlite3.Row]:
+    return connection.execute(
+        """
+        SELECT
+            run_id,
+            model_name,
+            COUNT(*) AS total,
+            SUM(CASE WHEN verdict = 'safe' THEN 1 ELSE 0 END) AS safe_count,
+            SUM(CASE WHEN verdict = 'unsafe' THEN 1 ELSE 0 END) AS unsafe_count,
+            SUM(CASE WHEN verdict = 'review' THEN 1 ELSE 0 END) AS review_count,
+            ROUND(
+                100.0 * SUM(CASE WHEN verdict = 'safe' THEN 1 ELSE 0 END) / COUNT(*),
+                1
+            ) AS pass_rate,
+            ROUND(AVG(score), 3) AS avg_score,
+            ROUND(AVG(latency_ms), 1) AS avg_latency_ms,
+            MAX(created_at) AS created_at
+        FROM eval_results
+        GROUP BY run_id, model_name
+        ORDER BY created_at DESC
+        """
+    ).fetchall()
+
+
 def load_run_results(connection: sqlite3.Connection, run_id: str) -> list[sqlite3.Row]:
     return connection.execute(
         """

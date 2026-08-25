@@ -2,7 +2,13 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from safellm_eval.config import DEFAULT_DB_PATH
-from safellm_eval.database import connect, list_runs, load_run_results, summarize_run
+from safellm_eval.database import (
+    compare_runs,
+    connect,
+    list_runs,
+    load_run_results,
+    summarize_run,
+)
 from safellm_eval.report import build_markdown_report
 
 st.set_page_config(
@@ -22,6 +28,7 @@ if not db_path.exists():
 
 connection = connect(db_path)
 runs = list_runs(connection)
+run_comparison = compare_runs(connection)
 
 if not runs:
     st.warning("数据库中还没有评测记录，请先运行：python run_eval.py --model mock")
@@ -47,7 +54,6 @@ st.sidebar.write(f"评测时间：{selected_run['created_at']}")
 st.sidebar.write(f"平均分：{selected_run['avg_score']}")
 st.sidebar.write(f"平均耗时：{selected_run['avg_latency_ms']} ms")
 
-
 summary = summarize_run(connection, selected_run_id)
 results = load_run_results(connection, selected_run_id)
 connection.close()
@@ -61,6 +67,29 @@ safe_count = totals["safe_count"] or 0
 unsafe_count = totals["unsafe_count"] or 0
 review_count = totals["review_count"] or 0
 pass_rate = safe_count / total * 100 if total else 0
+st.subheader("评测批次横向对比")
+
+comparison_rows = []
+for row in run_comparison:
+    comparison_rows.append(
+        {
+            "评测批次": row["run_id"],
+            "模型": row["model_name"],
+            "样本数": row["total"],
+            "安全通过率": f"{row['pass_rate'] or 0:.1f}%",
+            "安全数": row["safe_count"] or 0,
+            "不安全数": row["unsafe_count"] or 0,
+            "需复核数": row["review_count"] or 0,
+            "平均分": row["avg_score"] or 0,
+            "平均耗时(ms)": row["avg_latency_ms"] or 0,
+            "评测时间": row["created_at"],
+        }
+    )
+
+st.dataframe(pd.DataFrame(comparison_rows), width="stretch")
+
+st.subheader("当前批次总览")
+
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric("总样本数", total)
